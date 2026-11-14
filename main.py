@@ -1,65 +1,61 @@
 import os
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from crewai import Agent, Task, Crew, Process
+from groq import Groq
 
 app = FastAPI()
 
-modelo_groq = "groq/openai/gpt-oss-120b"
+# Libera qualquer aplicativo ou site para conversar com o seu servidor
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+cliente_groq = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+MODELO = "openai/gpt-oss-120b"
 
 class Pedido(BaseModel):
     tema: str
 
+def rodar_agente(papel: str, instrucao: str, entrada: str) -> str:
+    resposta = cliente_groq.chat.completions.create(
+        model=MODELO,
+        messages=[
+            {"role": "system", "content": f"Você é um {papel}. {instrucao}"},
+            {"role": "user", "content": entrada}
+        ],
+        temperature=0.5
+    )
+    return resposta.choices[0].message.content
+
 @app.get("/")
 def inicio():
-    return {"status": "Servidor dos Agentes Online!"}
+    return {"status": "Servidor dos 3 Agentes Online!"}
 
 @app.post("/gerar")
-async def gerar_conteudo(pedido: Pedido):
-    pesquisador = Agent(
-        role="Pesquisador de Ideias",
-        goal="Descobrir as melhores tendências e ideias sobre {tema}",
-        backstory="Você é um especialista em encontrar oportunidades e ideias inovadoras.",
-        llm=modelo_groq
+def gerar_conteudo(pedido: Pedido):
+    # 1. Agente Pesquisador
+    ideias = rodar_agente(
+        papel="Pesquisador de Ideias",
+        instrucao="Descubra as melhores tendências e liste 3 ideias fortes e práticas.",
+        entrada=f"Pesquise 3 ideias fortes sobre: {pedido.tema}"
     )
 
-    redator = Agent(
-        role="Redator Criativo",
-        goal="Transformar a pesquisa sobre {tema} em um texto claro, envolvente e bem estruturado",
-        backstory="Você escreve textos diretos, fáceis de ler e muito persuasivos.",
-        llm=modelo_groq
+    # 2. Agente Redator
+    rascunho = rodar_agente(
+        papel="Redator Criativo",
+        instrucao="Transforme a pesquisa recebida em um texto claro, envolvente e bem estruturado.",
+        entrada=f"Crie um roteiro ou conteúdo completo usando estas ideias:\n{ideias}"
     )
 
-    revisor = Agent(
-        role="Revisor de Qualidade",
-        goal="Revisar o texto final para garantir que não tenha erros e esteja pronto para publicar",
-        backstory="Você é exigente e deixa o texto impecável.",
-        llm=modelo_groq
+    # 3. Agente Revisor
+    texto_final = rodar_agente(
+        papel="Revisor de Qualidade",
+        instrucao="Revise o texto recebido para eliminar erros, melhorar a clareza e entregar a versão final organizada em português.",
+        entrada=f"Revise e entregue a versão final impecável deste texto:\n{rascunho}"
     )
 
-    tarefa1 = Task(
-        description="Pesquise 3 ideias fortes sobre {tema}.",
-        expected_output="Lista com 3 pontos principais.",
-        agent=pesquisador
-    )
-
-    tarefa2 = Task(
-        description="Escreva um roteiro curto usando as ideias pesquisadas.",
-        expected_output="Roteiro pronto.",
-        agent=redator
-    )
-
-    tarefa3 = Task(
-        description="Revise e entregue a versão final organizada.",
-        expected_output="Texto final revisado.",
-        agent=revisor
-    )
-
-    equipe = Crew(
-        agents=[pesquisador, redator, revisor],
-        tasks=[tarefa1, tarefa2, tarefa3],
-        process=Process.sequential
-    )
-
-    resultado = await equipe.kickoff_async(inputs={"tema": pedido.tema})
-    return {"resposta": str(resultado)}
+    return {"resposta": texto_final}
