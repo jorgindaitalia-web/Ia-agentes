@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
 import edge_tts
+import httpx
 
 app = FastAPI()
 
@@ -50,7 +51,6 @@ PAGINA = (
     '<button class="i" id="bm">🎤</button>'
     '<button class="i" id="e">➤</button></footer>'
     '<script>'
-    'const WORKER_URL="https://workers.dev";'
     'const c=document.getElementById("c"),t=document.getElementById("t"),e=document.getElementById("e"),'
     'bm=document.getElementById("bm"),bf=document.getElementById("bf"),f=document.getElementById("f"),v=document.getElementById("v");'
     'let va=true,fb=null,mr=null,ac=[],aa=null;'
@@ -68,13 +68,8 @@ PAGINA = (
     't.value="";t.placeholder="Escreva ou fale...";const im=fb;fb=null;const cg=add("Pensando...","b");'
     'try{const r=await fetch("/chat",{method:"POST",headers:{"Content-Type":"application/json"},'
     'body:JSON.stringify({texto:tx||"Descreva esta foto",imagem_base64:im})});'
-    'const d=await r.json();'
-    'if(d.prompt_imagem){cg.textContent="Gerando imagem...";'
-    'const rw=await fetch(WORKER_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:d.prompt_imagem})});'
-    'const dw=await rw.json();cg.remove();'
-    'if(dw.image){add(d.resposta,"b",dw.image,d.audio_mp3)}else{add("Aviso Worker: "+(dw.error||"sem imagem"),"b")}'
-    '}else{cg.remove();add(d.resposta,"b",null,d.audio_mp3)}'
-    '}catch(er){cg.textContent="Detalhe erro: "+er.message}}'
+    'const d=await r.json();cg.remove();add(d.resposta,"b",d.imagem_gerada,d.audio_mp3)'
+    '}catch(er){cg.textContent="Erro de rede: "+er.message}}'
     'e.onclick=()=>env();t.onkeypress=ev=>{if(ev.key==="Enter")env()};'
     'bm.onclick=async()=>{if(mr&&mr.state==="recording"){mr.stop();bm.classList.remove("g");return}'
     'try{const s=await navigator.mediaDevices.getUserMedia({audio:true});mr=new MediaRecorder(s);ac=[];'
@@ -98,6 +93,26 @@ async def gerar_voz_mp3(texto: str) -> str:
             bytes_audio += pedaco["data"]
     audio_b64 = base64.b64encode(bytes_audio).decode("utf-8")
     return f"data:audio/mp3;base64,{audio_b64}"
+
+async def gerar_imagem_google(prompt_en: str):
+    chave = os.environ.get("GEMINI_API_KEY")
+    if not chave:
+        return None, "Configure GEMINI_API_KEY no Render."
+    url = f"https://googleapis.com{chave.strip()}"
+    payload = {
+        "instances": [{"prompt": prompt_en}],
+        "parameters": {"sampleCount": 1}
+    }
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, json=payload)
+            dados = resp.json()
+            if "predictions" in dados and len(dados["predictions"]) > 0:
+                b64 = next(iter(dados["predictions"]))["bytesBase64Encoded"]
+                return f"data:image/jpeg;base64,{b64}", None
+            return None, f"Aviso Google: {str(dados)[:130]}"
+    except Exception as e:
+        return None, f"Erro Google: {str(e)[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
@@ -133,7 +148,7 @@ async def conversar(dados: Mensagem):
             )
             texto_final = next(iter(resposta.choices)).message.content
             audio_mp3 = await gerar_voz_mp3(texto_final)
-            return {"resposta": texto_final, "prompt_imagem": None, "audio_mp3": audio_mp3}
+            return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
         resposta = cliente_groq.chat.completions.create(
             model="openai/gpt-oss-20b",
@@ -155,12 +170,17 @@ async def conversar(dados: Mensagem):
 
         if texto_final.startswith("IMG:"):
             prompt_en = texto_final[4:].strip()
-            msg_resposta = "Aqui esta a imagem que voce pediu."
-            audio_mp3 = await gerar_voz_mp3(msg_resposta)
-            return {"resposta": msg_resposta, "prompt_imagem": prompt_en, "audio_mp3": audio_mp3}
+            img_pronta, motivo_erro = await gerar_imagem_google(prompt_en)
+            if img_pronta:
+                msg_resposta = "Aqui esta a imagem que voce pediu."
+                audio_mp3 = await gerar_voz_mp3(msg_resposta)
+                return {"resposta": msg_resposta, "imagem_gerada": img_pronta, "audio_mp3": audio_mp3}
+            else:
+                audio_mp3 = await gerar_voz_mp3(motivo_erro)
+                return {"resposta": motivo_erro, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
         audio_mp3 = await gerar_voz_mp3(texto_final)
-        return {"resposta": texto_final, "prompt_imagem": None, "audio_mp3": audio_mp3}
+        return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
     except Exception as erro:
-        return {"resposta": f"Erro no servidor: {str(erro)}", "prompt_imagem": None, "audio_mp3": None}
+        return {"resposta": f"Erro no servidor: {str(erro)}", "imagem_gerada": None, "audio_mp3": None}
