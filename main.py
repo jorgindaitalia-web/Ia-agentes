@@ -93,18 +93,18 @@ async def gerar_voz_mp3(texto: str) -> str:
     audio_b64 = base64.b64encode(bytes_audio).decode("utf-8")
     return f"data:audio/mp3;base64,{audio_b64}"
 
-async def gerar_imagem_hf(prompt_en: str) -> Optional[str]:
+async def gerar_imagem_hf(prompt_en: str):
     hf_token = os.environ.get("HF_TOKEN")
     if not hf_token:
-        return None
+        return None, "A variavel HF_TOKEN nao esta salva no Render."
     url = "https://huggingface.co"
-    headers = {"Authorization": f"Bearer {hf_token}"}
+    headers = {"Authorization": f"Bearer {hf_token.strip()}"}
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(url, headers=headers, json={"inputs": prompt_en})
         if resp.status_code == 200 and len(resp.content) > 1000:
             img_b64 = base64.b64encode(resp.content).decode("utf-8")
-            return f"data:image/jpeg;base64,{img_b64}"
-    return None
+            return f"data:image/jpeg;base64,{img_b64}", None
+        return None, f"Hugging Face erro {resp.status_code}: {resp.text[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
@@ -162,15 +162,14 @@ async def conversar(dados: Mensagem):
 
         if texto_final.startswith("IMG:"):
             prompt_en = texto_final[4:].strip()
-            img_pronta = await gerar_imagem_hf(prompt_en)
+            img_pronta, motivo_erro = await gerar_imagem_hf(prompt_en)
             if img_pronta:
                 msg_resposta = "Aqui esta a imagem que voce pediu."
                 audio_mp3 = await gerar_voz_mp3(msg_resposta)
                 return {"resposta": msg_resposta, "imagem_gerada": img_pronta, "audio_mp3": audio_mp3}
             else:
-                msg_erro = "Verifique se a variavel HF_TOKEN foi adicionada no Render."
-                audio_mp3 = await gerar_voz_mp3(msg_erro)
-                return {"resposta": msg_erro, "imagem_gerada": None, "audio_mp3": audio_mp3}
+                audio_mp3 = await gerar_voz_mp3(motivo_erro)
+                return {"resposta": motivo_erro, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
         audio_mp3 = await gerar_voz_mp3(texto_final)
         return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
