@@ -99,8 +99,8 @@ def gerar_imagem_hf(prompt_en: str):
     if not hf_token:
         return None, "HF_TOKEN nao configurado."
     try:
-        client = InferenceClient(token=hf_token.strip())
-        imagem = client.text_to_image(prompt_en, model="black-forest-labs/FLUX.1-schnell")
+        client = InferenceClient(provider="hf-inference", token=hf_token.strip())
+        imagem = client.text_to_image(prompt_en, model="stabilityai/stable-diffusion-xl-base-1.0")
         buf = io.BytesIO()
         imagem.save(buf, format="JPEG")
         img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
