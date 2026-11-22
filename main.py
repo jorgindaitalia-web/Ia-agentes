@@ -94,6 +94,7 @@ async def gerar_voz_mp3(texto: str) -> str:
     return f"data:audio/mp3;base64,{audio_b64}"
 
 def gerar_imagem_hf(prompt_en: str):
+def gerar_imagem_hf(prompt_en: str):
     nv_key = os.environ.get("NVIDIA_API_KEY")
     if not nv_key:
         return None, "Configure NVIDIA_API_KEY no Render."
@@ -109,23 +110,20 @@ def gerar_imagem_hf(prompt_en: str):
         "seed": 0,
         "steps": 4
     }
-    urls = [
-        "https://nvidia.com",
-        "https://nvidia.com"
-    ]
-    ultimo_aviso = ""
-    for url in urls:
-        try:
-            resp = httpx.post(url, headers=headers, json=payload, timeout=60.0)
-            if resp.status_code == 200 and resp.text.strip().startswith("{"):
-                dados = resp.json()
-                if "artifacts" in dados and len(dados["artifacts"]) > 0:
-                    img_b64 = next(iter(dados["artifacts"]))["base64"]
-                    return f"data:image/jpeg;base64,{img_b64}", None
-            ultimo_aviso = f"Status {resp.status_code}: {resp.text.strip()[:90]}"
-        except Exception as e:
-            ultimo_aviso = f"Erro: {str(e)[:90]}"
-    return None, ultimo_aviso
+    url = "https://nvidia.com"
+    try:
+        resp = httpx.post(url, headers=headers, json=payload, timeout=60.0)
+        if resp.status_code in (301, 302, 307, 308) and resp.headers.get("location"):
+            nova_url = resp.headers.get("location")
+            resp = httpx.post(nova_url, headers=headers, json=payload, timeout=60.0)
+        if resp.status_code == 200 and resp.text.strip().startswith("{"):
+            dados = resp.json()
+            if "artifacts" in dados and len(dados["artifacts"]) > 0:
+                img_b64 = next(iter(dados["artifacts"]))["base64"]
+                return f"data:image/jpeg;base64,{img_b64}", None
+        return None, f"Status {resp.status_code} ({resp.headers.get('location', '')}): {resp.text.strip()[:90]}"
+    except Exception as e:
+        return None, f"Erro NVIDIA: {str(e)[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
