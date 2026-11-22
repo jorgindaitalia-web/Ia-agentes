@@ -1,4 +1,5 @@
 import os
+import io
 import base64
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File
@@ -6,8 +7,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
+from huggingface_hub import InferenceClient
 import edge_tts
-import httpx
 
 app = FastAPI()
 
@@ -93,18 +94,19 @@ async def gerar_voz_mp3(texto: str) -> str:
     audio_b64 = base64.b64encode(bytes_audio).decode("utf-8")
     return f"data:audio/mp3;base64,{audio_b64}"
 
-async def gerar_imagem_hf(prompt_en: str):
+def gerar_imagem_hf(prompt_en: str):
     hf_token = os.environ.get("HF_TOKEN")
     if not hf_token:
-        return None, "A variavel HF_TOKEN nao esta salva no Render."
-    url = "https://huggingface.co"
-    headers = {"Authorization": f"Bearer {hf_token.strip()}"}
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.post(url, headers=headers, json={"inputs": prompt_en})
-        if resp.status_code == 200 and len(resp.content) > 1000:
-            img_b64 = base64.b64encode(resp.content).decode("utf-8")
-            return f"data:image/jpeg;base64,{img_b64}", None
-        return None, f"Hugging Face erro {resp.status_code}: {resp.text[:120]}"
+        return None, "HF_TOKEN nao configurado."
+    try:
+        client = InferenceClient(token=hf_token.strip())
+        imagem = client.text_to_image(prompt_en, model="black-forest-labs/FLUX.1-schnell")
+        buf = io.BytesIO()
+        imagem.save(buf, format="JPEG")
+        img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        return f"data:image/jpeg;base64,{img_b64}", None
+    except Exception as e:
+        return None, f"Aviso HF: {str(e)[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
@@ -162,7 +164,7 @@ async def conversar(dados: Mensagem):
 
         if texto_final.startswith("IMG:"):
             prompt_en = texto_final[4:].strip()
-            img_pronta, motivo_erro = await gerar_imagem_hf(prompt_en)
+            img_pronta, motivo_erro = gerar_imagem_hf(prompt_en)
             if img_pronta:
                 msg_resposta = "Aqui esta a imagem que voce pediu."
                 audio_mp3 = await gerar_voz_mp3(msg_resposta)
