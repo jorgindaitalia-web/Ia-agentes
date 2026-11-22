@@ -97,30 +97,35 @@ def gerar_imagem_hf(prompt_en: str):
     nv_key = os.environ.get("NVIDIA_API_KEY")
     if not nv_key:
         return None, "Configure NVIDIA_API_KEY no Render."
-    try:
-        url = "https://nvidia.com"
-        headers = {
-            "Authorization": f"Bearer {nv_key.strip()}",
-            "Accept": "application/json",
-            "Content-Type": "application/json"
-        }
-        payload = {
-            "prompt": prompt_en,
-            "width": 768,
-            "height": 768,
-            "seed": 0,
-            "steps": 4
-        }
-        resp = httpx.post(url, headers=headers, json=payload, timeout=60.0, follow_redirects=True)
-        if resp.status_code != 200:
-            return None, f"Status NVIDIA {resp.status_code}: {resp.text[:120]}"
-        dados = resp.json()
-        if "artifacts" in dados and len(dados["artifacts"]) > 0:
-            img_b64 = next(iter(dados["artifacts"]))["base64"]
-            return f"data:image/jpeg;base64,{img_b64}", None
-        return None, f"Resposta NVIDIA: {str(dados)[:120]}"
-    except Exception as e:
-        return None, f"Erro NVIDIA: {str(e)[:120]}"
+    headers = {
+        "Authorization": f"Bearer {nv_key.strip()}",
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "prompt": prompt_en,
+        "width": 768,
+        "height": 768,
+        "seed": 0,
+        "steps": 4
+    }
+    urls = [
+        "https://nvidia.com",
+        "https://nvidia.com"
+    ]
+    ultimo_aviso = ""
+    for url in urls:
+        try:
+            resp = httpx.post(url, headers=headers, json=payload, timeout=60.0)
+            if resp.status_code == 200 and resp.text.strip().startswith("{"):
+                dados = resp.json()
+                if "artifacts" in dados and len(dados["artifacts"]) > 0:
+                    img_b64 = next(iter(dados["artifacts"]))["base64"]
+                    return f"data:image/jpeg;base64,{img_b64}", None
+            ultimo_aviso = f"Status {resp.status_code}: {resp.text.strip()[:90]}"
+        except Exception as e:
+            ultimo_aviso = f"Erro: {str(e)[:90]}"
+    return None, ultimo_aviso
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
@@ -189,6 +194,3 @@ async def conversar(dados: Mensagem):
 
         audio_mp3 = await gerar_voz_mp3(texto_final)
         return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
-
-    except Exception as erro:
-        return {"resposta": f"Erro no servidor: {str(erro)}", "imagem_gerada": None, "audio_mp3": None}
