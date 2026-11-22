@@ -136,15 +136,11 @@ async def gerar_imagem_segura(prompt_en: str):
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
     return PAGINA
+    
 @app.get("/icon.png")
 def icone_png():
-    import zlib, struct
-    w, h = 512, 512
-    raw = b"".join(b"\x00" + (b"\x02\x84\xc7\xff" * w) for _ in range(h))
-    def chunk(tag, data):
-        return struct.pack("!I", len(data)) + tag + data + struct.pack("!I", zlib.crc32(tag + data) & 0xffffffff)
-    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack("!IIBBBBB", w, h, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
-    return Response(content=png, media_type="image/png")
+    u = "https://" + "://githubusercontent.com"
+    return Response(content=httpx.get(u, follow_redirects=True).content, media_type="image/png")
 
 @app.get("/manifest.json")
 def manifesto_pwa():
