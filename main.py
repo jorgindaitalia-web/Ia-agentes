@@ -228,4 +228,4 @@ async def conversar(dados: Mensagem):
         return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
     except Exception as erro:
-        return {"resposta": f"Erro no servidor: {str(erro)}", "
+        return {"resposta": "Erro interno no servidor.", "imagem_gerada": None, "audio_mp3": None}
