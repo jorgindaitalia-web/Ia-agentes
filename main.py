@@ -194,6 +194,5 @@ async def conversar(dados: Mensagem):
 
         audio_mp3 = await gerar_voz_mp3(texto_final)
         return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
-
-except Exception as erro:
+    except Exception as erro:
         return {"resposta": f"Erro no servidor: {str(erro)}", "imagem_gerada": None, "audio_mp3": None}
