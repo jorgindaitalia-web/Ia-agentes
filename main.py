@@ -94,7 +94,6 @@ async def gerar_voz_mp3(texto: str) -> str:
     return f"data:audio/mp3;base64,{audio_b64}"
 
 def gerar_imagem_hf(prompt_en: str):
-def gerar_imagem_hf(prompt_en: str):
     nv_key = os.environ.get("NVIDIA_API_KEY")
     if not nv_key:
         return None, "Configure NVIDIA_API_KEY no Render."
