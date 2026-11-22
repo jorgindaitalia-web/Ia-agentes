@@ -141,7 +141,7 @@ def abrir_app():
 def manifesto_pwa():
     return JSONResponse({
         "name": "Agentes IA",
-        "short_name": "Agentes IA","id":"/"
+        "short_name": "Agentes IA","id":"/",
         "start_url": "/",
         "display": "standalone",
         "background_color": "#0b111a",
