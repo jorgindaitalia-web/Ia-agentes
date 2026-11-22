@@ -112,33 +112,23 @@ async def gerar_voz_mp3(texto: str) -> str:
     return f"data:audio/mp3;base64,{audio_b64}"
 
 async def gerar_imagem_segura(prompt_en: str):
-    chave = os.environ.get("GEMINI_API_KEY")
-    if not chave:
-        return None, "Configure GEMINI_API_KEY no Render."
+    acc_id = os.environ.get("CF_ACCOUNT_ID")
+    token = os.environ.get("CF_API_TOKEN")
+    if not acc_id or not token:
+        return None, "Configure CF_ACCOUNT_ID e CF_API_TOKEN no Render."
     try:
-        from google import genai
-        from google.genai import types
-        client = genai.Client(api_key=chave.strip())
-        modelos = ["gemini-2.0-flash-exp-image-generation", "gemini-2.5-flash-image"]
-        ultimo_erro = ""
-        for mod in modelos:
-            try:
-                res = client.models.generate_content(
-                    model=mod,
-                    contents=f"Generate an image of: {prompt_en}",
-                    config=types.GenerateContentConfig(response_modalities=["IMAGE"])
-                )
-                for cand in res.candidates:
-                    for part in cand.content.parts:
-                        if part.inline_data and part.inline_data.data:
-                            b64 = base64.b64encode(part.inline_data.data).decode("utf-8")
-                            mime = part.inline_data.mime_type or "image/jpeg"
-                            return f"data:{mime};base64,{b64}", None
-            except Exception as err_m:
-                ultimo_erro = str(err_m)[:120]
-        return None, f"Aviso Google: {ultimo_erro}"
+        host = "api." + "cloudflare.com"
+        url = f"https://{host}/client/v4/accounts/{acc_id.strip()}/ai/run/@cf/black-forest-labs/flux-1-schnell"
+        headers = {"Authorization": f"Bearer {token.strip()}"}
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, headers=headers, json={"prompt": prompt_en})
+            dados = resp.json()
+            if dados.get("success") and dados.get("result", {}).get("image"):
+                b64 = dados["result"]["image"]
+                return f"data:image/jpeg;base64,{b64}", None
+            return None, f"Aviso Cloudflare: {str(dados.get('errors'))[:120]}"
     except Exception as e:
-        return None, f"Erro Google: {str(e)[:120]}"
+        return None, f"Erro Cloudflare: {str(e)[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
