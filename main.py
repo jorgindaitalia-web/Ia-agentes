@@ -119,16 +119,26 @@ async def gerar_imagem_segura(prompt_en: str):
         from google import genai
         from google.genai import types
         client = genai.Client(api_key=chave.strip())
-        res = client.models.generate_images(
-            model="imagen-3.0-generate-002",
-            prompt=prompt_en,
-            config=types.GenerateImagesConfig(number_of_images=1, output_mime_type="image/jpeg")
-        )
-        img_bytes = next(iter(res.generated_images)).image.image_bytes
-        b64 = base64.b64encode(img_bytes).decode("utf-8")
-        return f"data:image/jpeg;base64,{b64}", None
+        modelos = ["gemini-2.0-flash-exp-image-generation", "gemini-2.5-flash-image"]
+        ultimo_erro = ""
+        for mod in modelos:
+            try:
+                res = client.models.generate_content(
+                    model=mod,
+                    contents=f"Generate an image of: {prompt_en}",
+                    config=types.GenerateContentConfig(response_modalities=["IMAGE"])
+                )
+                for cand in res.candidates:
+                    for part in cand.content.parts:
+                        if part.inline_data and part.inline_data.data:
+                            b64 = base64.b64encode(part.inline_data.data).decode("utf-8")
+                            mime = part.inline_data.mime_type or "image/jpeg"
+                            return f"data:{mime};base64,{b64}", None
+            except Exception as err_m:
+                ultimo_erro = str(err_m)[:120]
+        return None, f"Aviso Google: {ultimo_erro}"
     except Exception as e:
-        return None, f"Aviso Google: {str(e)[:120]}"
+        return None, f"Erro Google: {str(e)[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
