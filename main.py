@@ -101,23 +101,24 @@ def gerar_imagem_hf(prompt_en: str):
         url = "https://nvidia.com"
         headers = {
             "Authorization": f"Bearer {nv_key.strip()}",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "Content-Type": "application/json"
         }
         payload = {
             "prompt": prompt_en,
-            "mode": "base",
-            "cfg_scale": 3.5,
             "width": 768,
             "height": 768,
             "seed": 0,
-            "steps": 25
+            "steps": 4
         }
         resp = httpx.post(url, headers=headers, json=payload, timeout=60.0)
+        if resp.status_code != 200:
+            return None, f"Status NVIDIA {resp.status_code}: {resp.text[:120]}"
         dados = resp.json()
         if "artifacts" in dados and len(dados["artifacts"]) > 0:
             img_b64 = next(iter(dados["artifacts"]))["base64"]
             return f"data:image/jpeg;base64,{img_b64}", None
-        return None, f"Aviso NVIDIA: {str(dados)[:120]}"
+        return None, f"Resposta NVIDIA: {str(dados)[:120]}"
     except Exception as e:
         return None, f"Erro NVIDIA: {str(e)[:120]}"
 
