@@ -102,16 +102,20 @@ def gerar_imagem_hf(prompt_en: str):
         from google import genai
         from google.genai import types
         client = genai.Client(api_key=chave_google.strip())
-        res = client.models.generate_images(
-            model="imagen-3.0-generate-002",
-            prompt=prompt_en,
-            config=types.GenerateImagesConfig(number_of_images=1, output_mime_type="image/jpeg")
+        res = client.models.generate_content(
+            model="gemini-2.5-flash-image",
+            contents=f"Generate a high quality image of: {prompt_en}",
+            config=types.GenerateContentConfig(response_modalities=["IMAGE"])
         )
-        img_bytes = next(iter(res.generated_images)).image.image_bytes
-        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-        return f"data:image/jpeg;base64,{img_b64}", None
+        for cand in res.candidates:
+            for part in cand.content.parts:
+                if part.inline_data and part.inline_data.data:
+                    img_b64 = base64.b64encode(part.inline_data.data).decode("utf-8")
+                    mime = part.inline_data.mime_type or "image/jpeg"
+                    return f"data:{mime};base64,{img_b64}", None
+        return None, "O modelo nao retornou imagem."
     except Exception as e:
-        return None, f"Aviso Google: {str(e)[:120]}"
+        return None, f"Aviso Google: {str(e)[:140]}"
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
