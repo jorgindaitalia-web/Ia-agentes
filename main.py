@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
 import edge_tts
+import httpx
 
 app = FastAPI()
 
@@ -56,7 +57,7 @@ PAGINA = (
     'let va=true,fb=null,mr=null,ac=[],aa=null;'
     'v.onclick=()=>{va=!va;v.textContent=va?"Voz: ON":"Voz: OFF";v.classList.toggle("off",!va)};'
     'bf.onclick=()=>f.click();'
-    'f.onchange=ev=>{const fl=ev.target.files[0];if(!fl)return;const r=new FileReader();'
+    'f.onchange=ev=>{const fl=ev.target.files;if(!fl)return;const r=new FileReader();'
     'r.onload=()=>{fb=r.result;t.placeholder="Foto anexada! Digite..."};r.readAsDataURL(fl)};'
     'function toc(b){if(!b)return;if(aa)aa.pause();aa=new Audio(b);aa.play().catch(()=>{})}'
     'function add(tx,tp,im=null,au=null){const d=document.createElement("div");d.className="m "+tp;d.textContent=tx;'
@@ -92,6 +93,16 @@ async def gerar_voz_mp3(texto: str) -> str:
             bytes_audio += pedaco["data"]
     audio_b64 = base64.b64encode(bytes_audio).decode("utf-8")
     return f"data:audio/mp3;base64,{audio_b64}"
+
+async def baixar_imagem_b64(prompt_en: str) -> Optional[str]:
+    url = f"https://pollinations.ai{prompt_en}?width=768&height=768&nologo=true&seed=42"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    async with httpx.AsyncClient(timeout=45.0, follow_redirects=True) as client:
+        resp = await client.get(url, headers=headers)
+        if resp.status_code == 200 and len(resp.content) > 1000:
+            img_b64 = base64.b64encode(resp.content).decode("utf-8")
+            return f"data:image/jpeg;base64,{img_b64}"
+    return None
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
@@ -132,10 +143,15 @@ async def conversar(dados: Mensagem):
             )
             texto_en = next(iter(traducao.choices)).message.content.strip()
             prompt_en = urllib.parse.quote(texto_en)
-            url_imagem = f"https://pollinations.ai{prompt_en}?width=1024&height=1024&nologo=true"
-            msg_resposta = "Aqui esta a imagem que voce pediu."
-            audio_mp3 = await gerar_voz_mp3(msg_resposta)
-            return {"resposta": msg_resposta, "imagem_gerada": url_imagem, "audio_mp3": audio_mp3}
+            img_pronta = await baixar_imagem_b64(prompt_en)
+            if img_pronta:
+                msg_resposta = "Aqui esta a imagem que voce pediu."
+                audio_mp3 = await gerar_voz_mp3(msg_resposta)
+                return {"resposta": msg_resposta, "imagem_gerada": img_pronta, "audio_mp3": audio_mp3}
+            else:
+                msg_erro = "O gerador de imagens esta ocupado agora, tente pedir novamente em alguns segundos."
+                audio_mp3 = await gerar_voz_mp3(msg_erro)
+                return {"resposta": msg_erro, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
         if dados.imagem_base64:
             resposta = cliente_groq.chat.completions.create(
