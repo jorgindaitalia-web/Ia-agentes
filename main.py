@@ -1,7 +1,7 @@
 import os
 import urllib.parse
 from typing import Optional
-from fastapi import FastAPI
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
@@ -26,12 +26,25 @@ class Mensagem(BaseModel):
 def inicio():
     return {"status": "Assistente Completo Online!"}
 
+@app.post("/transcrever")
+async def transcrever_audio(audio: UploadFile = File(...)):
+    try:
+        conteudo = await audio.read()
+        transcricao = cliente_groq.audio.transcriptions.create(
+            file=(audio.filename or "voz.webm", conteudo),
+            model="whisper-large-v3-turbo",
+            language="pt"
+        )
+        return {"texto": transcricao.text}
+    except Exception as erro:
+        return {"texto": "", "erro": str(erro)}
+
 @app.post("/chat")
 def conversar(dados: Mensagem):
     try:
         texto_baixo = dados.texto.lower().strip()
 
-        # 1. Detecta qualquer pedido para criar/gerar/mostrar imagem ou desenho
+        # 1. Gerar imagem
         palavras_imagem = [
             "imagem", "foto", "desenh", "ilustra", "arte", "retrato", "pintura", "logo", "papel de parede"
         ]
@@ -56,7 +69,7 @@ def conversar(dados: Mensagem):
                     {"role": "user", "content": dados.texto}
                 ]
             )
-            texto_en = traducao.choices.message.content.strip()
+            texto_en = traducao.choices[0].message.content.strip()
             prompt_en = urllib.parse.quote(texto_en)
             url_imagem = f"https://pollinations.ai{prompt_en}?width=1024&height=1024&nologo=true"
             return {
@@ -64,7 +77,7 @@ def conversar(dados: Mensagem):
                 "imagem_gerada": url_imagem
             }
 
-        # 2. Ler e responder sobre foto enviada
+        # 2. Ler foto enviada
         if dados.imagem_base64:
             resposta = cliente_groq.chat.completions.create(
                 model="meta-llama/llama-4-scout-17b-16e-instruct",
@@ -79,21 +92,21 @@ def conversar(dados: Mensagem):
                 ],
                 temperature=0.5
             )
-            return {"resposta": resposta.choices.message.content, "imagem_gerada": None}
+            return {"resposta": resposta.choices[0].message.content, "imagem_gerada": None}
 
-        # 3. Resposta rápida e direta em texto (sem dar aula nem enrolar)
+        # 3. Resposta rápida e direta em texto
         resposta = cliente_groq.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
                 {
                     "role": "system",
-                    "content": "Você é um assistente pessoal rápido e direto. Responda sempre em português de forma curta, prática e natural, sem dar aulas longas, sem listas gigantes e sem usar asteriscos ou símbolos estranhos para que a leitura em voz alta fique limpa."
+                    "content": "Você é um assistente pessoal rápido e direto. Responda sempre em português de forma curta, prática e natural, sem dar aulas longas e sem usar asteriscos ou símbolos estranhos."
                 },
                 {"role": "user", "content": dados.texto}
             ],
             temperature=0.6
         )
-        return {"resposta": resposta.choices.message.content, "imagem_gerada": None}
+        return {"resposta": resposta.choices[0].message.content, "imagem_gerada": None}
 
     except Exception as erro:
         return {"resposta": f"Erro no servidor: {str(erro)}", "imagem_gerada": None}
