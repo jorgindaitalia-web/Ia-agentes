@@ -115,22 +115,20 @@ async def gerar_imagem_segura(prompt_en: str):
     chave = os.environ.get("GEMINI_API_KEY")
     if not chave:
         return None, "Configure GEMINI_API_KEY no Render."
-    base_url = "https://" + "://googleapis.com"
-    url = f"{base_url}/v1beta/models/imagen-3.0-generate-002:predict?key={chave.strip()}"
-    payload = {
-        "instances": [{"prompt": prompt_en}],
-        "parameters": {"sampleCount": 1}
-    }
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(url, json=payload)
-            dados = resp.json()
-            if "predictions" in dados and len(dados["predictions"]) > 0:
-                b64 = next(iter(dados["predictions"]))["bytesBase64Encoded"]
-                return f"data:image/jpeg;base64,{b64}", None
-            return None, f"Aviso Google: {str(dados)[:130]}"
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=chave.strip())
+        res = client.models.generate_images(
+            model="imagen-3.0-generate-002",
+            prompt=prompt_en,
+            config=types.GenerateImagesConfig(number_of_images=1, output_mime_type="image/jpeg")
+        )
+        img_bytes = next(iter(res.generated_images)).image.image_bytes
+        b64 = base64.b64encode(img_bytes).decode("utf-8")
+        return f"data:image/jpeg;base64,{b64}", None
     except Exception as e:
-        return None, f"Erro servidor: {str(e)[:120]}"
+        return None, f"Aviso Google: {str(e)[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
