@@ -1,4 +1,4 @@
-import os
+⁰import os
 import base64
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File
@@ -86,7 +86,7 @@ class Mensagem(BaseModel):
     imagem_base64: Optional[str] = None
 
 async def gerar_voz_mp3(texto: str) -> str:
-    comunicador = edge_tts.Communicate(texto, "pt-BR-AntonioNeural")
+    comunicador = edge_tts.Communicate(texto, "pt-BR-FranciscaNeural")
     bytes_audio = b""
     async for pedaco in comunicador.stream():
         if pedaco["type"] == "audio":
