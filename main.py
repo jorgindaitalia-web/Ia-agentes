@@ -202,3 +202,30 @@ async def conversar(dados: Mensagem):
                     "role": "system",
                     "content": (
                         "Voce e um assistente pessoal rapido e direto. "
+"Se o usuario pedir para criar, gerar, desenhar ou mostrar uma imagem/foto/desenho, "
+                        "NAO explique como desenhar. Responda APENAS com o prefixo 'IMG:' seguido da descricao visual detalhada em ingles (ex: IMG: a futuristic car with wings flying in the sky). "
+                        "Para qualquer outra pergunta, responda em portugues de forma curta, natural e sem asteriscos."
+                    )
+                },
+                {"role": "user", "content": dados.texto}
+            ],
+            temperature=0.6
+        )
+        texto_final = next(iter(resposta.choices)).message.content.strip()
+
+        if texto_final.startswith("IMG:"):
+            prompt_en = texto_final[4:].strip()
+            img_pronta, motivo_erro = await gerar_imagem_segura(prompt_en)
+            if img_pronta:
+                msg_resposta = "Aqui esta a imagem que voce pediu."
+                audio_mp3 = await gerar_voz_mp3(msg_resposta)
+                return {"resposta": msg_resposta, "imagem_gerada": img_pronta, "audio_mp3": audio_mp3}
+            else:
+                audio_mp3 = await gerar_voz_mp3(motivo_erro)
+                return {"resposta": motivo_erro, "imagem_gerada": None, "audio_mp3": audio_mp3}
+
+        audio_mp3 = await gerar_voz_mp3(texto_final)
+        return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
+
+    except Exception as erro:
+        return {"resposta": f"Erro no servidor: {str(erro)}", "
