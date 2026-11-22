@@ -134,24 +134,32 @@ async def gerar_imagem_segura(prompt_en: str):
         return None, f"Erro Cloudflare: {str(e)[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
-def abrir_app():
-    return PAGINA
+@app.get("/icon.png")
+def icone_png():
+    import zlib, struct
+    w, h = 512, 512
+    raw = b"".join(b"\x00" + (b"\x02\x84\xc7\xff" * w) for _ in range(h))
+    def chunk(tag, data):
+        return struct.pack("!I", len(data)) + tag + data + struct.pack("!I", zlib.crc32(tag + data) & 0xffffffff)
+    png = b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack("!IIBBBBB", w, h, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
+    return Response(content=png, media_type="image/png")
 
 @app.get("/manifest.json")
 def manifesto_pwa():
     return JSONResponse({
         "name": "Agentes IA",
-        "short_name": "Agentes IA","id":"/",
+        "short_name": "Agentes IA",
+        "id": "/",
         "start_url": "/",
         "display": "standalone",
         "background_color": "#0b111a",
         "theme_color": "#0b111a",
         "icons": [
             {
-                "src": "https://flaticon.com",
+                "src": "/icon.png",
                 "sizes": "512x512",
                 "type": "image/png",
-                "purpose": "any maskable"
+                "purpose": "any"
             }
         ]
     })
