@@ -102,25 +102,26 @@ def gerar_imagem_hf(prompt_en: str):
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
+    url = "https://nvidia.com"
     payload = {
+        "model": "black-forest-labs/flux.1-schnell",
         "prompt": prompt_en,
+        "response_format": "b64_json",
         "width": 768,
         "height": 768,
-        "seed": 0,
         "steps": 4
     }
-    url = "https://nvidia.com"
     try:
         resp = httpx.post(url, headers=headers, json=payload, timeout=60.0)
-        if resp.status_code in (301, 302, 307, 308) and resp.headers.get("location"):
-            nova_url = resp.headers.get("location")
-            resp = httpx.post(nova_url, headers=headers, json=payload, timeout=60.0)
-        if resp.status_code == 200 and resp.text.strip().startswith("{"):
+        if resp.status_code == 200:
             dados = resp.json()
+            if "data" in dados and len(dados["data"]) > 0:
+                img_b64 = next(iter(dados["data"]))["b64_json"]
+                return f"data:image/jpeg;base64,{img_b64}", None
             if "artifacts" in dados and len(dados["artifacts"]) > 0:
                 img_b64 = next(iter(dados["artifacts"]))["base64"]
                 return f"data:image/jpeg;base64,{img_b64}", None
-        return None, f"Status {resp.status_code} ({resp.headers.get('location', '')}): {resp.text.strip()[:90]}"
+        return None, f"Status {resp.status_code}: {resp.text.strip()[:110]}"
     except Exception as e:
         return None, f"Erro NVIDIA: {str(e)[:120]}"
 
