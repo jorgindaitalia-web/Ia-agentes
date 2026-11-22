@@ -13,6 +13,8 @@ import dns.resolver
 
 _orig_getaddrinfo = socket.getaddrinfo
 def _custom_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    if isinstance(host, bytes):
+        host = host.decode()
     try:
         return _orig_getaddrinfo(host, port, family, type, proto, flags)
     except socket.gaierror:
