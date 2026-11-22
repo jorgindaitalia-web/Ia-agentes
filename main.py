@@ -3,6 +3,7 @@ import base64
 import urllib.parse
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
@@ -33,9 +34,10 @@ async def gerar_voz_mp3(texto: str) -> str:
     audio_b64 = base64.b64encode(bytes_audio).decode("utf-8")
     return f"data:audio/mp3;base64,{audio_b64}"
 
-@app.get("/")
-def inicio():
-    return {"status": "Assistente com Voz e Imagem Online!"}
+@app.get("/", response_class=HTMLResponse)
+def abrir_app():
+    with open("index.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 @app.post("/transcrever")
 async def transcrever_audio(audio: UploadFile = File(...)):
@@ -79,7 +81,8 @@ async def conversar(dados: Mensagem):
                     {"role": "user", "content": dados.texto}
                 ]
             )
-            texto_en = traducao.choices.message.content.strip()
+            primeira = next(iter(traducao.choices))
+            texto_en = primeira.message.content.strip()
             prompt_en = urllib.parse.quote(texto_en)
             url_imagem = f"https://pollinations.ai{prompt_en}?width=1024&height=1024&nologo=true"
             msg_resposta = "Aqui está a imagem que você pediu."
@@ -104,7 +107,8 @@ async def conversar(dados: Mensagem):
                 ],
                 temperature=0.5
             )
-            texto_final = resposta.choices.message.content
+            primeira = next(iter(resposta.choices))
+            texto_final = primeira.message.content
             audio_mp3 = await gerar_voz_mp3(texto_final)
             return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
@@ -119,7 +123,8 @@ async def conversar(dados: Mensagem):
             ],
             temperature=0.6
         )
-        texto_final = resposta.choices.message.content
+        primeira = next(iter(resposta.choices))
+        texto_final = primeira.message.content
         audio_mp3 = await gerar_voz_mp3(texto_final)
         return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
