@@ -11,6 +11,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -51,7 +52,7 @@ def conversar(dados: Mensagem):
         # 2. Ler e responder sobre foto enviada
         if dados.imagem_base64:
             resposta = cliente_groq.chat.completions.create(
-                model="qwen/qwen3.8-27b",
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
                 messages=[
                     {
                         "role": "user",
@@ -65,13 +66,13 @@ def conversar(dados: Mensagem):
             )
             return {"resposta": resposta.choices[0].message.content, "imagem_gerada": None}
 
-        # 3. Resposta rápida em texto
+        # 3. Resposta rápida em texto (para falar e ler em voz alta)
         resposta = cliente_groq.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
                 {
                     "role": "system",
-                    "content": "Você é um assistente pessoal rápido, inteligente e direto. Responda sempre em português de forma clara e objetiva."
+                    "content": "Você é um assistente pessoal rápido, inteligente e direto. Responda sempre em português de forma clara, natural e objetiva, sem usar asteriscos ou símbolos estranhos para que a leitura em voz alta fique perfeita."
                 },
                 {"role": "user", "content": dados.texto}
             ],
