@@ -31,21 +31,36 @@ def conversar(dados: Mensagem):
     try:
         texto_baixo = dados.texto.lower().strip()
 
-        # 1. Criar imagem quando solicitado
-        gatilhos_imagem = ["crie uma imagem", "gere uma imagem", "desenhe", "faça uma imagem", "criar imagem", "gerar imagem"]
-        if not dados.imagem_base64 and any(g in texto_baixo for g in gatilhos_imagem):
+        # 1. Detecta qualquer pedido para criar/gerar/mostrar imagem ou desenho
+        palavras_imagem = [
+            "imagem", "foto", "desenh", "ilustra", "arte", "retrato", "pintura", "logo", "papel de parede"
+        ]
+        verbos_acao = [
+            "cri", "ger", "faz", "faça", "faca", "mostr", "quero", "manda", "mande", "produz"
+        ]
+
+        pediu_imagem = (
+            not dados.imagem_base64
+            and any(p in texto_baixo for p in palavras_imagem)
+            and (any(v in texto_baixo for v in verbos_acao) or len(texto_baixo.split()) <= 6)
+        )
+
+        if pediu_imagem:
             traducao = cliente_groq.chat.completions.create(
                 model="openai/gpt-oss-20b",
                 messages=[
-                    {"role": "system", "content": "Traduza a descrição da imagem para inglês em uma frase curta e detalhada. Responda apenas a tradução."},
+                    {
+                        "role": "system",
+                        "content": "Extract the visual subject from the user request and write a rich, detailed image generation prompt in English. Reply ONLY with the English prompt, nothing else."
+                    },
                     {"role": "user", "content": dados.texto}
                 ]
             )
-            texto_en = traducao.choices[0].message.content.strip()
+            texto_en = traducao.choices.message.content.strip()
             prompt_en = urllib.parse.quote(texto_en)
             url_imagem = f"https://pollinations.ai{prompt_en}?width=1024&height=1024&nologo=true"
             return {
-                "resposta": "Aqui está a imagem que você pediu:",
+                "resposta": "Aqui está a imagem:",
                 "imagem_gerada": url_imagem
             }
 
@@ -57,28 +72,28 @@ def conversar(dados: Mensagem):
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": dados.texto or "Descreva esta imagem e responda em português."},
+                            {"type": "text", "text": dados.texto or "Descreva esta imagem e responda em português de forma direta."},
                             {"type": "image_url", "image_url": {"url": dados.imagem_base64}}
                         ]
                     }
                 ],
                 temperature=0.5
             )
-            return {"resposta": resposta.choices[0].message.content, "imagem_gerada": None}
+            return {"resposta": resposta.choices.message.content, "imagem_gerada": None}
 
-        # 3. Resposta rápida em texto (para falar e ler em voz alta)
+        # 3. Resposta rápida e direta em texto (sem dar aula nem enrolar)
         resposta = cliente_groq.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
                 {
                     "role": "system",
-                    "content": "Você é um assistente pessoal rápido, inteligente e direto. Responda sempre em português de forma clara, natural e objetiva, sem usar asteriscos ou símbolos estranhos para que a leitura em voz alta fique perfeita."
+                    "content": "Você é um assistente pessoal rápido e direto. Responda sempre em português de forma curta, prática e natural, sem dar aulas longas, sem listas gigantes e sem usar asteriscos ou símbolos estranhos para que a leitura em voz alta fique limpa."
                 },
                 {"role": "user", "content": dados.texto}
             ],
             temperature=0.6
         )
-        return {"resposta": resposta.choices[0].message.content, "imagem_gerada": None}
+        return {"resposta": resposta.choices.message.content, "imagem_gerada": None}
 
     except Exception as erro:
-        return {"resposta": f"Aviso do servidor: {str(erro)}", "imagem_gerada": None}
+        return {"resposta": f"Erro no servidor: {str(erro)}", "imagem_gerada": None}
