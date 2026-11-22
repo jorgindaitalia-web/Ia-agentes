@@ -95,10 +95,23 @@ async def gerar_voz_mp3(texto: str) -> str:
     return f"data:audio/mp3;base64,{audio_b64}"
 
 def gerar_imagem_hf(prompt_en: str):
-    import urllib.parse
-    prompt_codificado = urllib.parse.quote(prompt_en)
-    url = f"https://pollinations.ai{prompt_codificado}?width=768&height=768&nologo=true"
-    return url, None
+    chave_google = os.environ.get("GEMINI_API_KEY")
+    if not chave_google:
+        return None, "GEMINI_API_KEY nao esta salva no Render."
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=chave_google.strip())
+        res = client.models.generate_images(
+            model="imagen-3.0-generate-002",
+            prompt=prompt_en,
+            config=types.GenerateImagesConfig(number_of_images=1, output_mime_type="image/jpeg")
+        )
+        img_bytes = next(iter(res.generated_images)).image.image_bytes
+        img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+        return f"data:image/jpeg;base64,{img_b64}", None
+    except Exception as e:
+        return None, f"Aviso Google: {str(e)[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
