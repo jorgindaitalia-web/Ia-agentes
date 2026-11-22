@@ -115,7 +115,8 @@ async def gerar_imagem_segura(prompt_en: str):
     chave = os.environ.get("GEMINI_API_KEY")
     if not chave:
         return None, "Configure GEMINI_API_KEY no Render."
-    url = f"https://googleapis.com{chave.strip()}"
+    base_url = "https://" + "://googleapis.com"
+    url = f"{base_url}/v1beta/models/imagen-3.0-generate-002:predict?key={chave.strip()}"
     payload = {
         "instances": [{"prompt": prompt_en}],
         "parameters": {"sampleCount": 1}
@@ -192,12 +193,4 @@ async def conversar(dados: Mensagem):
                 msg_resposta = "Aqui esta a imagem que voce pediu."
                 audio_mp3 = await gerar_voz_mp3(msg_resposta)
                 return {"resposta": msg_resposta, "imagem_gerada": img_pronta, "audio_mp3": audio_mp3}
-            else:
-                audio_mp3 = await gerar_voz_mp3(motivo_erro)
-                return {"resposta": motivo_erro, "imagem_gerada": None, "audio_mp3": audio_mp3}
-
-        audio_mp3 = await gerar_voz_mp3(texto_final)
-        return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
-
-    except Exception as erro:
-        return {"resposta": f"Erro no servidor: {str(erro)}", "imagem_gerada": None, "audio_mp3": None}
+else:
