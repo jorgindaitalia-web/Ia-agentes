@@ -95,18 +95,10 @@ async def gerar_voz_mp3(texto: str) -> str:
     return f"data:audio/mp3;base64,{audio_b64}"
 
 def gerar_imagem_hf(prompt_en: str):
-    hf_token = os.environ.get("HF_TOKEN")
-    if not hf_token:
-        return None, "HF_TOKEN nao configurado."
-    try:
-        client = InferenceClient(provider="hf-inference", token=hf_token.strip())
-        imagem = client.text_to_image(prompt_en, model="stabilityai/stable-diffusion-xl-base-1.0")
-        buf = io.BytesIO()
-        imagem.save(buf, format="JPEG")
-        img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-        return f"data:image/jpeg;base64,{img_b64}", None
-    except Exception as e:
-        return None, f"Aviso HF: {str(e)[:120]}"
+    import urllib.parse
+    prompt_codificado = urllib.parse.quote(prompt_en)
+    url = f"https://pollinations.ai{prompt_codificado}?width=768&height=768&nologo=true"
+    return url, None
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
