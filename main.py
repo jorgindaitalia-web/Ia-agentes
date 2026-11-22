@@ -104,20 +104,18 @@ def gerar_imagem_hf(prompt_en: str):
     }
     url = "https://nvidia.com"
     payload = {
-        "model": "black-forest-labs/flux.1-schnell",
         "prompt": prompt_en,
-        "response_format": "b64_json",
-        "width": 768,
-        "height": 768,
-        "steps": 4
+        "mode": "base",
+        "cfg_scale": 3.5,
+        "width": 1024,
+        "height": 1024,
+        "seed": 0,
+        "steps": 25
     }
     try:
         resp = httpx.post(url, headers=headers, json=payload, timeout=60.0)
         if resp.status_code == 200:
             dados = resp.json()
-            if "data" in dados and len(dados["data"]) > 0:
-                img_b64 = next(iter(dados["data"]))["b64_json"]
-                return f"data:image/jpeg;base64,{img_b64}", None
             if "artifacts" in dados and len(dados["artifacts"]) > 0:
                 img_b64 = next(iter(dados["artifacts"]))["base64"]
                 return f"data:image/jpeg;base64,{img_b64}", None
