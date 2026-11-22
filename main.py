@@ -3,7 +3,7 @@ import base64
 import socket
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response,FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
@@ -137,10 +137,9 @@ async def gerar_imagem_segura(prompt_en: str):
 def abrir_app():
     return PAGINA
     
-@app.get("/icon.png")
+   @app.get("/icon.png")
 def icone_png():
-    u = "https://" + "://githubusercontent.com"
-    return Response(content=httpx.get(u, follow_redirects=True).content, media_type="image/png")
+    return FileResponse("file_00000000ceec620eae300b53a0278936.png", media_type="image/png") 
 
 @app.get("/manifest.json")
 def manifesto_pwa():
