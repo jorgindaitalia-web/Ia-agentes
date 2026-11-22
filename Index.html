@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Agentes IA</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: #0b111a; color: #e2e8f0; display: flex; flex-direction: column; height: 100dvh; }
+    header { background: #131c2a; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; }
+    header h1 { font-size: 18px; color: #38bdf8; }
+    #btnVozAuto { background: #10b981; color: #fff; border: none; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: bold; }
+    #btnVozAuto.off { background: #475569; }
+    #chat { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .msg { max-width: 85%; padding: 12px 14px; border-radius: 16px; font-size: 15px; line-height: 1.4; word-wrap: break-word; }
+    .user { background: #0284c7; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+    .bot { background: #1e293b; color: #f1f5f9; align-self: flex-start; border-bottom-left-radius: 4px; }
+    .bot img { max-width: 100%; border-radius: 12px; margin-top: 8px; display: block; }
+    .btn-ouvir { margin-top: 8px; background: #334155; color: #38bdf8; border: none; padding: 5px 10px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+    footer { background: #131c2a; padding: 10px; display: flex; gap: 8px; align-items: center; border-top: 1px solid #1e293b; }
+    input[type="text"] { flex: 1; background: #1e293b; border: 1px solid #334155; color: #fff; padding: 12px 14px; border-radius: 24px; font-size: 15px; outline: none; }
+    button.icon-btn { width: 44px; height: 44px; border-radius: 50%; border: none; background: #1e293b; color: #38bdf8; font-size: 18px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    button.icon-btn.gravando { background: #ef4444; color: #fff; animation: pulse 1s infinite; }
+    button#btnEnviar { background: #10b981; color: #fff; }
+    @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Agentes IA</h1>
+    <button id="btnVozAuto">🔊 Voz: ON</button>
+  </header>
+
+  <div id="chat">
+    <div class="msg bot">Olá! Pode digitar, tocar no microfone para falar ou pedir para eu criar uma imagem.</div>
+  </div>
+
+  <footer>
+    <input type="file" id="inputFoto" accept="image/*" hidden />
+    <button class="icon-btn" id="btnFoto" title="Enviar Foto">📷</button>
+    <input type="text" id="campoTexto" placeholder="Escreva ou fale..." />
+    <button class="icon-btn" id="btnMic" title="Falar">🎤</button>
+    <button class="icon-btn" id="btnEnviar" title="Enviar">➤</button>
+  </footer>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const campoTexto = document.getElementById("campoTexto");
+    const btnEnviar = document.getElementById("btnEnviar");
+    const btnMic = document.getElementById("btnMic");
+    const btnFoto = document.getElementById("btnFoto");
+    const inputFoto = document.getElementById("inputFoto");
+    const btnVozAuto = document.getElementById("btnVozAuto");
+
+    let vozAtiva = true;
+    let fotoBase64 = null;
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let audioAtual = null;
+
+    btnVozAuto.onclick = () => {
+      vozAtiva = !vozAtiva;
+      btnVozAuto.textContent = vozAtiva ? "🔊 Voz: ON" : "🔇 Voz: OFF";
+      btnVozAuto.classList.toggle("off", !vozAtiva);
+    };
+
+    btnFoto.onclick = () => inputFoto.click();
+    inputFoto.onchange = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        fotoBase64 = reader.result;
+        campoTexto.placeholder = "Foto anexada! Digite o que quer saber...";
+      };
+      reader.readAsDataURL(file);
+    };
+
+    function tocarAudio(base64Audio) {
+      if (!base64Audio) return;
+      if (audioAtual) { audioAtual.pause(); }
+      audioAtual = new Audio(base64Audio);
+      audioAtual.play().catch(err => console.log("Toque em Ouvir para liberar áudio:", err));
+    }
+
+    function adicionarMensagem(texto, tipo, imagemUrl = null, audioMp3 = null) {
+      const div = document.createElement("div");
+      div.className = "msg " + tipo;
+      div.textContent = texto;
+
+      if (imagemUrl) {
+        const img = document.createElement("img");
+        img.src = imagemUrl;
+        div.appendChild(img);
+      }
+
+      if (audioMp3) {
+        const btn = document.createElement("button");
+        btn.className = "btn-ouvir";
+        btn.textContent = "🔊 Ouvir resposta";
+        btn.onclick = () => tocarAudio(audioMp3);
+        div.appendChild(document.createElement("br"));
+        div.appendChild(btn);
+        if (vozAtiva) tocarAudio(audioMp3);
+      }
+
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    async function enviarMensagem(textoManual = null) {
+      const texto = textoManual || campoTexto.value.trim();
+      if (!texto && !fotoBase64) return;
+
+      adicionarMensagem(texto || "📷 Foto enviada", "user");
+      campoTexto.value = "";
+      campoTexto.placeholder = "Escreva ou fale...";
+      const imgParaEnviar = fotoBase64;
+      fotoBase64 = null;
+
+      const carregando = adicionarMensagem("Pensando...", "bot");
+
+      try {
+        const resp = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ texto: texto || "Descreva esta foto", imagem_base64: imgParaEnviar })
+        });
+        const dados = await resp.json();
+        carregando.remove();
+        adicionarMensagem(dados.resposta, "bot", dados.imagem_gerada, dados.audio_mp3);
+      } catch (e) {
+        carregando.textContent = "Erro de conexão com o servidor.";
+      }
+    }
+
+    btnEnviar.onclick = () => enviarMensagem();
+    campoTexto.onkeypress = (e) => { if (e.key === "Enter") enviarMensagem(); };
+
+    btnMic.onclick = async () => {
+      if (mediaRecorder && mediaRecorder.state === "recording") {
+        mediaRecorder.stop();
+        btnMic.classList.remove("gravando");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(audioChunks, { type: "audio/webm" });
+          const formData = new FormData();
+          formData.append("audio", blob, "voz.webm");
+          campoTexto.placeholder = "Transcrevendo sua voz...";
+          const r = await fetch("/transcrever", { method: "POST", body: formData });
+          const res = await r.json();
+          campoTexto.placeholder = "Escreva ou fale...";
+          if (res.texto) enviarMensagem(res.texto);
+        };
+        mediaRecorder.start();
+        btnMic.classList.add("gravando");
+      } catch (err) {
+        alert("Permita o acesso ao microfone nas configurações do navegador!");
+      }
+    };
+  </script>
+</body>
+</html>
