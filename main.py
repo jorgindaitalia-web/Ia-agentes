@@ -94,21 +94,32 @@ async def gerar_voz_mp3(texto: str) -> str:
     return f"data:audio/mp3;base64,{audio_b64}"
 
 def gerar_imagem_hf(prompt_en: str):
-    acc_id = os.environ.get("CF_ACCOUNT_ID")
-    token = os.environ.get("CF_API_TOKEN")
-    if not acc_id or not token:
-        return None, "Configure CF_ACCOUNT_ID e CF_API_TOKEN no Render."
+    nv_key = os.environ.get("NVIDIA_API_KEY")
+    if not nv_key:
+        return None, "Configure NVIDIA_API_KEY no Render."
     try:
-        url = f"https://cloudflare.com{acc_id.strip()}/ai/run/@cf/black-forest-labs/flux-1-schnell"
-        headers = {"Authorization": f"Bearer {token.strip()}"}
-        resp = httpx.post(url, headers=headers, json={"prompt": prompt_en}, timeout=60.0)
+        url = "https://nvidia.com"
+        headers = {
+            "Authorization": f"Bearer {nv_key.strip()}",
+            "Accept": "application/json"
+        }
+        payload = {
+            "prompt": prompt_en,
+            "mode": "base",
+            "cfg_scale": 3.5,
+            "width": 768,
+            "height": 768,
+            "seed": 0,
+            "steps": 25
+        }
+        resp = httpx.post(url, headers=headers, json=payload, timeout=60.0)
         dados = resp.json()
-        if dados.get("success") and dados.get("result", {}).get("image"):
-            img_b64 = dados["result"]["image"]
+        if "artifacts" in dados and len(dados["artifacts"]) > 0:
+            img_b64 = next(iter(dados["artifacts"]))["base64"]
             return f"data:image/jpeg;base64,{img_b64}", None
-        return None, f"Aviso Cloudflare: {str(dados.get('errors'))[:120]}"
+        return None, f"Aviso NVIDIA: {str(dados)[:120]}"
     except Exception as e:
-        return None, f"Erro Cloudflare: {str(e)[:120]}"
+        return None, f"Erro NVIDIA: {str(e)[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
 def abrir_app():
