@@ -134,6 +134,8 @@ async def gerar_imagem_segura(prompt_en: str):
         return None, f"Erro Cloudflare: {str(e)[:120]}"
 
 @app.get("/", response_class=HTMLResponse)
+def abrir_app():
+    return PAGINA
 @app.get("/icon.png")
 def icone_png():
     import zlib, struct
