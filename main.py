@@ -1,10 +1,12 @@
 import os
+import base64
 import urllib.parse
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
+import edge_tts
 
 app = FastAPI()
 
@@ -22,9 +24,18 @@ class Mensagem(BaseModel):
     texto: str
     imagem_base64: Optional[str] = None
 
+async def gerar_voz_mp3(texto: str) -> str:
+    comunicador = edge_tts.Communicate(texto, "pt-BR-AntonioNeural")
+    bytes_audio = b""
+    async for pedaco in comunicador.stream():
+        if pedaco["type"] == "audio":
+            bytes_audio += pedaco["data"]
+    audio_b64 = base64.b64encode(bytes_audio).decode("utf-8")
+    return f"data:audio/mp3;base64,{audio_b64}"
+
 @app.get("/")
 def inicio():
-    return {"status": "Assistente Completo Online!"}
+    return {"status": "Assistente com Voz e Imagem Online!"}
 
 @app.post("/transcrever")
 async def transcrever_audio(audio: UploadFile = File(...)):
@@ -40,11 +51,10 @@ async def transcrever_audio(audio: UploadFile = File(...)):
         return {"texto": "", "erro": str(erro)}
 
 @app.post("/chat")
-def conversar(dados: Mensagem):
+async def conversar(dados: Mensagem):
     try:
         texto_baixo = dados.texto.lower().strip()
 
-        # 1. Gerar imagem
         palavras_imagem = [
             "imagem", "foto", "desenh", "ilustra", "arte", "retrato", "pintura", "logo", "papel de parede"
         ]
@@ -69,15 +79,17 @@ def conversar(dados: Mensagem):
                     {"role": "user", "content": dados.texto}
                 ]
             )
-            texto_en = traducao.choices[0].message.content.strip()
+            texto_en = traducao.choices.message.content.strip()
             prompt_en = urllib.parse.quote(texto_en)
             url_imagem = f"https://pollinations.ai{prompt_en}?width=1024&height=1024&nologo=true"
+            msg_resposta = "Aqui está a imagem que você pediu."
+            audio_mp3 = await gerar_voz_mp3(msg_resposta)
             return {
-                "resposta": "Aqui está a imagem:",
-                "imagem_gerada": url_imagem
+                "resposta": msg_resposta,
+                "imagem_gerada": url_imagem,
+                "audio_mp3": audio_mp3
             }
 
-        # 2. Ler foto enviada
         if dados.imagem_base64:
             resposta = cliente_groq.chat.completions.create(
                 model="meta-llama/llama-4-scout-17b-16e-instruct",
@@ -92,9 +104,10 @@ def conversar(dados: Mensagem):
                 ],
                 temperature=0.5
             )
-            return {"resposta": resposta.choices[0].message.content, "imagem_gerada": None}
+            texto_final = resposta.choices.message.content
+            audio_mp3 = await gerar_voz_mp3(texto_final)
+            return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
-        # 3. Resposta rápida e direta em texto
         resposta = cliente_groq.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
@@ -106,7 +119,9 @@ def conversar(dados: Mensagem):
             ],
             temperature=0.6
         )
-        return {"resposta": resposta.choices[0].message.content, "imagem_gerada": None}
+        texto_final = resposta.choices.message.content
+        audio_mp3 = await gerar_voz_mp3(texto_final)
+        return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
     except Exception as erro:
-        return {"resposta": f"Erro no servidor: {str(erro)}", "imagem_gerada": None}
+        return {"resposta": f"Erro no servidor: {str(erro)}", "imagem_gerada": None, "audio_mp3": None}
