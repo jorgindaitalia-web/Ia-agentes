@@ -95,13 +95,20 @@ async def gerar_voz_mp3(texto: str) -> str:
     return f"data:audio/mp3;base64,{audio_b64}"
 
 async def baixar_imagem_b64(prompt_en: str) -> Optional[str]:
-    url = f"https://pollinations.ai{prompt_en}?width=768&height=768&nologo=true&seed=42"
+    urls = [
+        f"https://pollinations.ai{prompt_en}?width=768&height=768&nologo=true",
+        f"https://pollinations.ai{prompt_en}?width=768&height=768&nologo=true"
+    ]
     headers = {"User-Agent": "Mozilla/5.0"}
     async with httpx.AsyncClient(timeout=45.0, follow_redirects=True) as client:
-        resp = await client.get(url, headers=headers)
-        if resp.status_code == 200 and len(resp.content) > 1000:
-            img_b64 = base64.b64encode(resp.content).decode("utf-8")
-            return f"data:image/jpeg;base64,{img_b64}"
+        for url in urls:
+            try:
+                resp = await client.get(url, headers=headers)
+                if resp.status_code == 200 and len(resp.content) > 1000:
+                    img_b64 = base64.b64encode(resp.content).decode("utf-8")
+                    return f"data:image/jpeg;base64,{img_b64}"
+            except Exception:
+                continue
     return None
 
 @app.get("/", response_class=HTMLResponse)
@@ -124,35 +131,6 @@ async def transcrever_audio(audio: UploadFile = File(...)):
 @app.post("/chat")
 async def conversar(dados: Mensagem):
     try:
-        texto_baixo = dados.texto.lower().strip()
-        palavras_imagem = ["imagem", "foto", "desenh", "ilustra", "arte", "retrato", "pintura", "logo", "papel de parede"]
-        verbos_acao = ["cri", "ger", "faz", "faça", "faca", "mostr", "quero", "manda", "mande", "produz"]
-        pediu_imagem = (
-            not dados.imagem_base64
-            and any(p in texto_baixo for p in palavras_imagem)
-            and (any(v in texto_baixo for v in verbos_acao) or len(texto_baixo.split()) <= 6)
-        )
-
-        if pediu_imagem:
-            traducao = cliente_groq.chat.completions.create(
-                model="openai/gpt-oss-20b",
-                messages=[
-                    {"role": "system", "content": "Extract the visual subject and write a detailed image prompt in English. Reply ONLY with the prompt."},
-                    {"role": "user", "content": dados.texto}
-                ]
-            )
-            texto_en = next(iter(traducao.choices)).message.content.strip()
-            prompt_en = urllib.parse.quote(texto_en)
-            img_pronta = await baixar_imagem_b64(prompt_en)
-            if img_pronta:
-                msg_resposta = "Aqui esta a imagem que voce pediu."
-                audio_mp3 = await gerar_voz_mp3(msg_resposta)
-                return {"resposta": msg_resposta, "imagem_gerada": img_pronta, "audio_mp3": audio_mp3}
-            else:
-                msg_erro = "O gerador de imagens esta ocupado agora, tente pedir novamente em alguns segundos."
-                audio_mp3 = await gerar_voz_mp3(msg_erro)
-                return {"resposta": msg_erro, "imagem_gerada": None, "audio_mp3": audio_mp3}
-
         if dados.imagem_base64:
             resposta = cliente_groq.chat.completions.create(
                 model="meta-llama/llama-4-scout-17b-16e-instruct",
@@ -172,12 +150,33 @@ async def conversar(dados: Mensagem):
         resposta = cliente_groq.chat.completions.create(
             model="openai/gpt-oss-20b",
             messages=[
-                {"role": "system", "content": "Voce e um assistente pessoal rapido e direto. Responda sempre em portugues de forma curta e natural, sem asteriscos."},
+                {
+                    "role": "system",
+                    "content": (
+                        "Voce e um assistente pessoal rapido e direto. "
+                        "Se o usuario pedir para criar, gerar, desenhar ou mostrar uma imagem/foto/desenho, "
+                        "NAO explique como desenhar. Responda APENAS com o prefixo 'IMG:' seguido da descricao visual detalhada em ingles (ex: IMG: a futuristic car with wings flying in the sky). "
+                        "Para qualquer outra pergunta, responda em portugues de forma curta, natural e sem asteriscos."
+                    )
+                },
                 {"role": "user", "content": dados.texto}
             ],
             temperature=0.6
         )
-        texto_final = next(iter(resposta.choices)).message.content
+        texto_final = next(iter(resposta.choices)).message.content.strip()
+
+        if texto_final.startswith("IMG:"):
+            prompt_en = urllib.parse.quote(texto_final[4:].strip())
+            img_pronta = await baixar_imagem_b64(prompt_en)
+            if img_pronta:
+                msg_resposta = "Aqui esta a imagem que voce pediu."
+                audio_mp3 = await gerar_voz_mp3(msg_resposta)
+                return {"resposta": msg_resposta, "imagem_gerada": img_pronta, "audio_mp3": audio_mp3}
+            else:
+                msg_erro = "O gerador de imagens gratuito esta instavel agora. Tente pedir novamente em instantes."
+                audio_mp3 = await gerar_voz_mp3(msg_erro)
+                return {"resposta": msg_erro, "imagem_gerada": None, "audio_mp3": audio_mp3}
+
         audio_mp3 = await gerar_voz_mp3(texto_final)
         return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
 
