@@ -139,7 +139,7 @@ def abrir_app():
     
 @app.get("/icon.png")
 def icone_png():
-    return FileResponse("file_00000000ceec620eae300b53a0278936.png", media_type="image/png") 
+    return FileResponse("file_00000000ceec820eaa300b53a0278936.png", media_type="image/png") 
 
 @app.get("/manifest.json")
 def manifesto_pwa():
