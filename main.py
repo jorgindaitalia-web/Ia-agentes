@@ -3,7 +3,7 @@ import base64
 import socket
 from typing import Optional
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from groq import Groq
@@ -41,6 +41,8 @@ cliente_groq = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 PAGINA = (
     '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>'
     '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>'
+    '<meta name="theme-color" content="#0b111a"/>'
+    '<link rel="manifest" href="/manifest.json"/>'
     '<title>Agentes IA</title><style>'
     '*{box-sizing:border-box;margin:0;padding:0;font-family:sans-serif}'
     'body{background:#0b111a;color:#e2e8f0;display:flex;flex-direction:column;height:100dvh}'
@@ -68,6 +70,7 @@ PAGINA = (
     '<button class="i" id="bm">🎤</button>'
     '<button class="i" id="e">➤</button></footer>'
     '<script>'
+    'if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js").catch(()=>{})}'
     'const c=document.getElementById("c"),t=document.getElementById("t"),e=document.getElementById("e"),'
     'bm=document.getElementById("bm"),bf=document.getElementById("bf"),f=document.getElementById("f"),v=document.getElementById("v");'
     'let va=true,fb=null,mr=null,ac=[],aa=null;'
@@ -134,6 +137,32 @@ async def gerar_imagem_segura(prompt_en: str):
 def abrir_app():
     return PAGINA
 
+@app.get("/manifest.json")
+def manifesto_pwa():
+    return JSONResponse({
+        "name": "Agentes IA",
+        "short_name": "Agentes IA",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0b111a",
+        "theme_color": "#0b111a",
+        "icons": [
+            {
+                "src": "https://flaticon.com",
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any maskable"
+            }
+        ]
+    })
+
+@app.get("/sw.js")
+def service_worker():
+    return Response(
+        content="self.addEventListener('fetch', e => e.respondWith(fetch(e.request)));",
+        media_type="application/javascript"
+    )
+
 @app.post("/transcrever")
 async def transcrever_audio(audio: UploadFile = File(...)):
     try:
@@ -173,30 +202,3 @@ async def conversar(dados: Mensagem):
                     "role": "system",
                     "content": (
                         "Voce e um assistente pessoal rapido e direto. "
-                        "Se o usuario pedir para criar, gerar, desenhar ou mostrar uma imagem/foto/desenho, "
-                        "NAO explique como desenhar. Responda APENAS com o prefixo 'IMG:' seguido da descricao visual detalhada em ingles (ex: IMG: a futuristic car with wings flying in the sky). "
-                        "Para qualquer outra pergunta, responda em portugues de forma curta, natural e sem asteriscos."
-                    )
-                },
-                {"role": "user", "content": dados.texto}
-            ],
-            temperature=0.6
-        )
-        texto_final = next(iter(resposta.choices)).message.content.strip()
-
-        if texto_final.startswith("IMG:"):
-            prompt_en = texto_final[4:].strip()
-            img_pronta, motivo_erro = await gerar_imagem_segura(prompt_en)
-            if img_pronta:
-                msg_resposta = "Aqui esta a imagem que voce pediu."
-                audio_mp3 = await gerar_voz_mp3(msg_resposta)
-                return {"resposta": msg_resposta, "imagem_gerada": img_pronta, "audio_mp3": audio_mp3}
-            else:
-                audio_mp3 = await gerar_voz_mp3(motivo_erro)
-                return {"resposta": motivo_erro, "imagem_gerada": None, "audio_mp3": audio_mp3}
-
-        audio_mp3 = await gerar_voz_mp3(texto_final)
-        return {"resposta": texto_final, "imagem_gerada": None, "audio_mp3": audio_mp3}
-
-    except Exception as erro:
-        return {"resposta": f"Erro no servidor: {str(erro)}", "imagem_gerada": None, "audio_mp3": None}
