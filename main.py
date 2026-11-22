@@ -137,7 +137,7 @@ async def gerar_imagem_segura(prompt_en: str):
 def abrir_app():
     return PAGINA
     
-   @app.get("/icon.png")
+@app.get("/icon.png")
 def icone_png():
     return FileResponse("file_00000000ceec620eae300b53a0278936.png", media_type="image/png") 
 
