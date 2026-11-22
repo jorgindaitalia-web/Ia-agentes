@@ -111,7 +111,7 @@ def gerar_imagem_hf(prompt_en: str):
             "seed": 0,
             "steps": 4
         }
-        resp = httpx.post(url, headers=headers, json=payload, timeout=60.0)
+        resp = httpx.post(url, headers=headers, json=payload, timeout=60.0, follow_redirects=True)
         if resp.status_code != 200:
             return None, f"Status NVIDIA {resp.status_code}: {resp.text[:120]}"
         dados = resp.json()
